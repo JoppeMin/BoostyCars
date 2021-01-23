@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Cinemachine;
@@ -8,7 +9,6 @@ using Cinemachine;
 public class PlayerMovement : MonoBehaviour
 {
     Rigidbody rb;
-    [SerializeField]
     private float boostForce;
     int maximumBoostForce = 1;
     [SerializeField]
@@ -16,7 +16,8 @@ public class PlayerMovement : MonoBehaviour
     float inputDirection;
     private Vector3 currentAngle;
     CinemachineVirtualCamera camBehaviour;
-    ParticleSystem boostPS;
+    [SerializeField]
+    List<ParticleSystem> boostPS = new List<ParticleSystem>();
     ParticleSystem directionalPS;
 
     [SerializeField]
@@ -32,15 +33,15 @@ public class PlayerMovement : MonoBehaviour
     {
         rb = this.gameObject.GetComponent<Rigidbody>();
         camBehaviour = GameObject.FindObjectOfType<CinemachineVirtualCamera>();
-        boostPS = this.gameObject.GetComponentInChildren<ParticleSystem>();
         directionalPS = GameObject.Find("DirectionalPS").GetComponent<ParticleSystem>();
+        boostPS = GameObject.Find("BoostChargeParent").GetComponentsInChildren<ParticleSystem>().ToList();
         outlineMat = this.gameObject.GetComponentInChildren<MeshRenderer>().sharedMaterial;
     }
 
     private void Start()
     {
         currentAngle = this.transform.position;
-        boostPS.Stop();
+        MultiParticleFX(boostPS, false);
         directionalPS.Stop();
     }
 
@@ -57,7 +58,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (Input.GetButtonDown("Horizontal"))
         {
-            boostPS.Play();
+            MultiParticleFX(boostPS, true);
             directionalPS.Play();
             Quaternion rotationTarget = Quaternion.Euler(0, Input.GetAxisRaw("Horizontal") * 90, 0);
             directionalPS.transform.localRotation = rotationTarget;
@@ -79,8 +80,9 @@ public class PlayerMovement : MonoBehaviour
         {
             Time.timeScale = 1;
             camBehaviour.m_Lens.FieldOfView = cameraTargetFov;
-            
-            boostPS.Stop();
+
+            MultiParticleFX(boostPS, false);
+
             directionalPS.Stop();
             directionalPS.Clear();
 
@@ -140,5 +142,16 @@ public class PlayerMovement : MonoBehaviour
     private void OnDrawGizmos()
     {
         Gizmos.DrawWireCube(this.transform.position + (transform.up * 0.7f), new Vector3(1.2f, 0.6f, 1));
+    }
+
+    public void MultiParticleFX(List<ParticleSystem> psList, bool shouldPlay)
+    {
+        foreach (ParticleSystem ps in psList)
+        {
+            if (shouldPlay)
+                ps.Play();
+            else
+                ps.Stop();
+        }
     }
 }
