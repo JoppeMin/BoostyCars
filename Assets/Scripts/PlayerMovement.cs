@@ -60,7 +60,7 @@ public class PlayerMovement : MonoBehaviour
         if (timesJumped >= 2)
             return;
 
-        if (Input.GetButtonDown("Horizontal"))
+        if (Input.GetButtonDown("Horizontal") && inputDirection == 0)
         {
             MultiParticleFX(boostPS, true);
             directionalPS.Play();
@@ -69,14 +69,14 @@ public class PlayerMovement : MonoBehaviour
 
             inputDirection = Input.GetAxisRaw("Horizontal");
         }
-        if (Input.GetButton("Horizontal"))
+        if (Input.GetButton("Horizontal") && inputDirection == Input.GetAxisRaw("Horizontal"))
         {
             camBehaviour.m_Lens.FieldOfView = cameraTargetFov - Mathf.SmoothStep(0, cameraZoomAmount, boostForce);
             Time.timeScale = 1 - boostForce / 2;
 
             if (boostForce < maximumBoostForce)
             {
-                boostForce += 0.01f;
+                boostForce += 1.5f * Time.deltaTime;
                 rb.velocity = rb.velocity - (rb.velocity * boostForce);
             }  
         }
@@ -94,7 +94,8 @@ public class PlayerMovement : MonoBehaviour
             {
                 rb.AddForce((transform.right * inputDirection * 20) * boostForce, ForceMode.Impulse);
             }
-            SetTimesJumped(timesJumped++);
+            timesJumped++;
+            SetTimesJumped(timesJumped);
 
             inputDirection = 0;
             boostForce = 0;
@@ -118,7 +119,7 @@ public class PlayerMovement : MonoBehaviour
 
     private void GroundedBehaviour()
     {
-        Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (-transform.up * 0.1f), 0.3f);
+        Collider[] hitColliders = Physics.OverlapSphere(this.transform.position, 0.2f);
         if (hitColliders.Length > 1)
         {
             SetTimesJumped(timesJumped = 0);
@@ -139,10 +140,10 @@ public class PlayerMovement : MonoBehaviour
         switch (timesJumped)
         {
             case 0:
-                outlineMat.SetColor("_OutlineColor", Color.white);
+                outlineMat.SetColor("_OutlineColor", Color.yellow);
                 break;
             case 1:
-                outlineMat.SetColor("_OutlineColor", Color.yellow);
+                outlineMat.SetColor("_OutlineColor", new Color(1, 0.80f, 0.016f));
                 break;
             case 2:
                 outlineMat.SetColor("_OutlineColor", Color.grey);
@@ -155,7 +156,7 @@ public class PlayerMovement : MonoBehaviour
     private void OnDrawGizmos()
     {
         Gizmos.DrawWireSphere(this.transform.position + (transform.up * 0.7f), 0.4f);
-        Gizmos.DrawWireSphere(this.transform.position + (-transform.up * 0.1f), 0.3f);
+        Gizmos.DrawWireSphere(this.transform.position, 0.2f);
     }
 
     public void MultiParticleFX(List<ParticleSystem> psList, bool shouldPlay)
