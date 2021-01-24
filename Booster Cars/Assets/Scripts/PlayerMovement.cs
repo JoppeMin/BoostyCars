@@ -28,6 +28,7 @@ public class PlayerMovement : MonoBehaviour
     Material outlineMat;
 
     private int timesJumped = 0;
+    bool isGrounded;
 
     void OnValidate()
     {
@@ -43,17 +44,20 @@ public class PlayerMovement : MonoBehaviour
         currentAngle = this.transform.position;
         MultiParticleFX(boostPS, false);
         directionalPS.Stop();
+        SetTimesJumped(timesJumped = 0);
+        GroundedBehaviour();
     }
 
     void Update()
     {
         BoostBehaviour();
         RolloverBehaviour();
+        GroundedBehaviour();
     }
 
     private void BoostBehaviour()
     {
-        if (timesJumped > 1)
+        if (timesJumped >= 2)
             return;
 
         if (Input.GetButtonDown("Horizontal"))
@@ -62,6 +66,8 @@ public class PlayerMovement : MonoBehaviour
             directionalPS.Play();
             Quaternion rotationTarget = Quaternion.Euler(0, Input.GetAxisRaw("Horizontal") * 90, 0);
             directionalPS.transform.localRotation = rotationTarget;
+
+            inputDirection = Input.GetAxisRaw("Horizontal");
         }
         if (Input.GetButton("Horizontal"))
         {
@@ -72,9 +78,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 boostForce += 0.01f;
                 rb.velocity = rb.velocity - (rb.velocity * boostForce);
-            }
-                
-            inputDirection = Input.GetAxisRaw("Horizontal");
+            }  
         }
         if (Input.GetButtonUp("Horizontal"))
         {
@@ -88,11 +92,9 @@ public class PlayerMovement : MonoBehaviour
 
             if (timesJumped < 2)
             {
-                
                 rb.AddForce((transform.right * inputDirection * 20) * boostForce, ForceMode.Impulse);
             }
-            timesJumped++;
-            OutlineColor();
+            SetTimesJumped(timesJumped++);
 
             inputDirection = 0;
             boostForce = 0;
@@ -103,26 +105,37 @@ public class PlayerMovement : MonoBehaviour
 
     private void RolloverBehaviour()
     {
-        
         if (rb.velocity.magnitude < 1 && boostForce < 0.1f)
         {
-            Collider[] hitColliders = Physics.OverlapBox(this.transform.position + (-transform.up * 0.7f), new Vector3(1f, 0.6f, 1), transform.rotation);
-            if (hitColliders.Length < 1)
+            Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (transform.up * 0.7f), 0.4f);
+            if (hitColliders.Length > 1)
             {
                 rb.AddForce(-transform.up);
                 rb.AddTorque(0, 0f, -360, ForceMode.Impulse);
             }
-            else
+        }
+    }
+
+    private void GroundedBehaviour()
+    {
+        Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (-transform.up * 0.1f), 0.3f);
+        if (hitColliders.Length > 1)
+        {
+            SetTimesJumped(timesJumped = 0);
+            isGrounded = true;
+        }
+        else
+        {
+            if (isGrounded == true)
             {
-                timesJumped = 0;
-                OutlineColor();
+                SetTimesJumped(timesJumped = 1);
+                isGrounded = false;
             }
         }
     }
 
-    private void OutlineColor()
+    private void SetTimesJumped(int timesJumped)
     {
-        
         switch (timesJumped)
         {
             case 0:
@@ -141,7 +154,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        Gizmos.DrawWireCube(this.transform.position + (transform.up * 0.7f), new Vector3(1.2f, 0.6f, 1));
+        Gizmos.DrawWireSphere(this.transform.position + (transform.up * 0.7f), 0.4f);
+        Gizmos.DrawWireSphere(this.transform.position + (-transform.up * 0.1f), 0.3f);
     }
 
     public void MultiParticleFX(List<ParticleSystem> psList, bool shouldPlay)
