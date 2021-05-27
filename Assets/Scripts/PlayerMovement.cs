@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using Cinemachine;
+using DG.Tweening;
 
 
 public class PlayerMovement : MonoBehaviour
@@ -11,19 +12,18 @@ public class PlayerMovement : MonoBehaviour
     Rigidbody rb;
     private float boostForce;
     int maximumBoostForce = 1;
-    [SerializeField]
-    Slider boostForceIndicator;
+    [SerializeField] Slider boostForceIndicator;
     float inputDirection;
     private Vector3 currentAngle;
     CinemachineVirtualCamera camBehaviour;
-    [SerializeField]
-    List<ParticleSystem> boostPS = new List<ParticleSystem>();
+    [SerializeField] List<ParticleSystem> chargePS = new List<ParticleSystem>();
+    [SerializeField] List<ParticleSystem> boostPS = new List<ParticleSystem>();
     ParticleSystem directionalPS;
+    [SerializeField] Transform carVisual;
+    [SerializeField] List<GameObject> carWheels = new List<GameObject>();
 
-    [SerializeField]
-    float cameraZoomAmount;
-    [SerializeField]
-    float cameraTargetFov;
+    [SerializeField] float cameraZoomAmount;
+    [SerializeField] float cameraTargetFov;
 
     Material outlineMat;
 
@@ -32,17 +32,19 @@ public class PlayerMovement : MonoBehaviour
 
     void OnValidate()
     {
+        carWheels = GameObject.FindGameObjectsWithTag("Wheels").ToList();
         rb = this.gameObject.GetComponent<Rigidbody>();
         camBehaviour = GameObject.FindObjectOfType<CinemachineVirtualCamera>();
         directionalPS = GameObject.Find("DirectionalPS").GetComponent<ParticleSystem>();
-        boostPS = GameObject.Find("BoostChargeParent").GetComponentsInChildren<ParticleSystem>().ToList();
+        chargePS = GameObject.Find("BoostChargeParent").GetComponentsInChildren<ParticleSystem>().ToList();
+        boostPS = GameObject.Find("BoostLaunchParent").GetComponentsInChildren<ParticleSystem>().ToList();
         outlineMat = this.gameObject.GetComponentInChildren<MeshRenderer>().sharedMaterial;
     }
 
     private void Start()
     {
         currentAngle = this.transform.position;
-        MultiParticleFX(boostPS, false);
+        MultiParticleFX(chargePS, false);
         directionalPS.Stop();
         SetTimesJumped(timesJumped = 0);
         GroundedBehaviour();
@@ -53,16 +55,16 @@ public class PlayerMovement : MonoBehaviour
         BoostBehaviour();
         RolloverBehaviour();
         GroundedBehaviour();
+        ZoomBehaviour();
     }
 
     private void BoostBehaviour()
     {
         if (timesJumped >= 2)
             return;
-
         if (Input.GetButtonDown("Horizontal") && inputDirection == 0)
         {
-            MultiParticleFX(boostPS, true);
+            MultiParticleFX(chargePS, true);
             directionalPS.Play();
             Quaternion rotationTarget = Quaternion.Euler(0, Input.GetAxisRaw("Horizontal") * 90, 0);
             directionalPS.transform.localRotation = rotationTarget;
@@ -78,17 +80,20 @@ public class PlayerMovement : MonoBehaviour
             {
                 boostForce += 1.5f * Time.deltaTime;
                 rb.velocity = rb.velocity - (rb.velocity * boostForce);
-            }  
+            }
+            RotateCarDirection();
         }
         if (Input.GetButtonUp("Horizontal"))
         {
             Time.timeScale = 1;
             camBehaviour.m_Lens.FieldOfView = cameraTargetFov;
 
-            MultiParticleFX(boostPS, false);
+            MultiParticleFX(chargePS, false);
+            MultiParticleFX(boostPS, true);
 
             directionalPS.Stop();
             directionalPS.Clear();
+            
 
             if (timesJumped < 2)
             {
@@ -96,12 +101,17 @@ public class PlayerMovement : MonoBehaviour
             }
             timesJumped++;
             SetTimesJumped(timesJumped);
-
             inputDirection = 0;
             boostForce = 0;
         }
 
         boostForceIndicator.value = boostForce;
+
+        float dot = Vector3.Dot(this.transform.forward, carVisual.transform.forward);
+        foreach (GameObject go in carWheels)
+        {
+            go.transform.Rotate(new Vector3(0, 0, (dot * rb.velocity.x * -2)));
+        }
     }
 
     private void RolloverBehaviour()
@@ -114,6 +124,17 @@ public class PlayerMovement : MonoBehaviour
                 rb.AddForce(-transform.up);
                 rb.AddTorque(0, 0f, -360, ForceMode.Impulse);
             }
+        }
+    }
+
+    private void ZoomBehaviour()
+    {
+        if (Input.GetButton("Vertical"))
+        {
+            camBehaviour.m_Lens.FieldOfView = 100;
+        } else
+        {
+            camBehaviour.m_Lens.FieldOfView = cameraTargetFov;
         }
     }
 
@@ -132,6 +153,27 @@ public class PlayerMovement : MonoBehaviour
                 SetTimesJumped(timesJumped = 1);
                 isGrounded = false;
             }
+        }
+    }
+
+    private void RotateCarDirection()
+    {
+        Vector3 currentRot = carVisual.localEulerAngles;
+        float rotationVal = carVisual.localEulerAngles.y;
+        switch (inputDirection)
+        {
+            case -1:
+                DOVirtual.Float(rotationVal, 180, 0.2f, angle => {
+                    carVisual.localEulerAngles = new Vector3(currentRot.x, angle, currentRot.z);
+                });
+                break;
+            case 1:
+                DOVirtual.Float(rotationVal, 0, 0.2f, angle => {
+                    carVisual.localEulerAngles = new Vector3(currentRot.x, angle, currentRot.z);
+                });
+                break;
+            default:
+                break;
         }
     }
 
