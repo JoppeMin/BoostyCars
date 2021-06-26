@@ -160,9 +160,11 @@ public class PlayerMovement : MonoBehaviour
     {
         if (rb.velocity.magnitude < 1 && boostForce < 0.1f)
         {
-            Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (transform.up * 0.9f), 0.3f);
-            if (hitColliders.Length > 1)
+            RaycastHit hit;
+            // Does the ray intersect any objects excluding the player layer
+            if (Physics.Raycast(transform.position, transform.TransformDirection(Vector3.up), out hit, 1))
             {
+                Debug.DrawRay(transform.position, transform.TransformDirection(Vector3.up));
                 rb.AddForce(-transform.up);
                 rb.AddTorque(0, 0f, -360, ForceMode.Impulse);
             }
@@ -183,9 +185,12 @@ public class PlayerMovement : MonoBehaviour
     private void GroundedBehaviour()
     {
         //todo: convert to raycast, tagcheck
-        Collider[] hitColliders = Physics.OverlapSphere(this.transform.position, 0.2f);
-        if (hitColliders.Length > 1)
+
+        RaycastHit hit;
+        // Does the ray intersect any objects excluding the player layer
+        if (Physics.Raycast(transform.position, transform.TransformDirection(Vector3.down), out hit, 0.3f))
         {
+            Debug.DrawRay(transform.position, transform.TransformDirection(Vector3.down) * 0.3f);
             SetTimesJumped(timesJumped = 0);
             isGrounded = true;
         }
@@ -236,12 +241,6 @@ public class PlayerMovement : MonoBehaviour
             default:
                 break;
         }
-    }
-
-    private void OnDrawGizmos()
-    {
-        Gizmos.DrawWireSphere(this.transform.position + (transform.up * 0.7f), 0.4f);
-        Gizmos.DrawWireSphere(this.transform.position, 0.2f);
     }
 
     public void MultiParticleFX(List<ParticleSystem> psList, bool shouldPlay)
