@@ -2,24 +2,29 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 using Cinemachine;
 using DG.Tweening;
 
 
 public class PlayerMovement : MonoBehaviour
 {
+    public @InputSystem _controls;
+
     Rigidbody rb;
+
     private float boostForce;
     int maximumBoostForce = 1;
     [SerializeField] Slider boostForceIndicator;
     float inputDirection;
     private Vector3 currentAngle;
     CinemachineVirtualCamera camBehaviour;
+
     [SerializeField] List<ParticleSystem> chargePS = new List<ParticleSystem>();
     [SerializeField] List<ParticleSystem> boostPS = new List<ParticleSystem>();
     ParticleSystem directionalPS;
+
     [SerializeField] Transform carVisual;
     [SerializeField] List<GameObject> carWheels = new List<GameObject>();
 
@@ -30,6 +35,7 @@ public class PlayerMovement : MonoBehaviour
 
     private int timesJumped = 0;
     bool isGrounded;
+    bool isCharging = false;
 
     void OnValidate()
     {
@@ -51,50 +57,68 @@ public class PlayerMovement : MonoBehaviour
         GroundedBehaviour();
     }
 
-    void Update()
+    private void OnEnable()
     {
-        BoostBehaviour();
-        RolloverBehaviour();
-        GroundedBehaviour();
-        ZoomBehaviour();
+        _controls = new InputSystem();
+
+        _controls.Game.Movement.performed += BoostInput;
+        _controls.Game.Movement.canceled += BoostInput;
+        _controls.Game.Movement.Enable();
+
+        _controls.Game.Zoom.performed += ZoomBehaviour;
+        _controls.Game.Zoom.canceled += ZoomBehaviour;
+        _controls.Game.Zoom.Enable();
+    }
+    private void OnDisable()
+    {
+        _controls.Game.Movement.performed -= BoostInput;
+        _controls.Game.Movement.canceled -= BoostInput;
+        _controls.Game.Movement.Disable();
+
+        _controls.Game.Zoom.performed -= ZoomBehaviour;
+        _controls.Game.Zoom.canceled -= ZoomBehaviour;
+        _controls.Game.Zoom.Disable();
     }
 
-    private void BoostBehaviour()
+    void Update()
     {
+        BoostUpdate();
+        RollWheels();
+        RolloverBehaviour();
+        GroundedBehaviour();
+    }
+
+    private void BoostInput(InputAction.CallbackContext context)
+    {
+        float value = context.ReadValue<float>();
         if (timesJumped >= 2)
             return;
-        if (Input.GetButtonDown("Horizontal") && inputDirection == 0)
+
+        if (value != 0 && inputDirection == 0)
         {
+            isCharging = true;
             MultiParticleFX(chargePS, true);
             directionalPS.Play();
-            Quaternion rotationTarget = Quaternion.Euler(0, Input.GetAxisRaw("Horizontal") * 90, 0);
+            Quaternion rotationTarget = Quaternion.Euler(0, Mathf.Round(value) * 90, 0);
             directionalPS.transform.localRotation = rotationTarget;
 
-            inputDirection = Input.GetAxisRaw("Horizontal");
+            inputDirection = Mathf.Round(value);
         }
-        if (Input.GetButton("Horizontal") && inputDirection == Input.GetAxisRaw("Horizontal"))
+        if (value != 0 && inputDirection == Mathf.Round(value))
         {
-            camBehaviour.m_Lens.FieldOfView = cameraTargetFov - Mathf.SmoothStep(0, cameraZoomAmount, boostForce);
-            Time.timeScale = 1 - boostForce / 2;
-
-            if (boostForce < maximumBoostForce)
-            {
-                boostForce += 1.5f * Time.deltaTime;
-                rb.velocity = rb.velocity - (rb.velocity * boostForce);
-            }
             RotateCarDirection();
         }
-        if (Input.GetButtonUp("Horizontal"))
+        if (value == 0)
         {
+            isCharging = false;
             Time.timeScale = 1;
-            camBehaviour.m_Lens.FieldOfView = cameraTargetFov;
+            DOTween.To(() => camBehaviour.m_Lens.FieldOfView, x => camBehaviour.m_Lens.FieldOfView = x, cameraTargetFov, 0.2f);
 
             MultiParticleFX(chargePS, false);
             MultiParticleFX(boostPS, true);
 
             directionalPS.Stop();
             directionalPS.Clear();
-            
 
             if (timesJumped < 2)
             {
@@ -104,10 +128,27 @@ public class PlayerMovement : MonoBehaviour
             SetTimesJumped(timesJumped);
             inputDirection = 0;
             boostForce = 0;
+            boostForceIndicator.value = boostForce;
         }
+    }
 
-        boostForceIndicator.value = boostForce;
+    public void BoostUpdate()
+    {
+        if (isCharging)
+        {
+            camBehaviour.m_Lens.FieldOfView = cameraTargetFov - Mathf.SmoothStep(0, cameraZoomAmount, boostForce);
+            Time.timeScale = 1 - boostForce / 2;
+            if (boostForce < maximumBoostForce)
+            {
+                boostForce += 1.5f * Time.deltaTime;
+                rb.velocity = rb.velocity - (rb.velocity * boostForce);
+            }
+            boostForceIndicator.value = boostForce;
+        }
+    }
 
+    public void RollWheels()
+    {
         float dot = Vector3.Dot(this.transform.forward, carVisual.transform.forward);
         foreach (GameObject go in carWheels)
         {
@@ -119,7 +160,7 @@ public class PlayerMovement : MonoBehaviour
     {
         if (rb.velocity.magnitude < 1 && boostForce < 0.1f)
         {
-            Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (transform.up * 0.7f), 0.4f);
+            Collider[] hitColliders = Physics.OverlapSphere(this.transform.position + (transform.up * 0.9f), 0.3f);
             if (hitColliders.Length > 1)
             {
                 rb.AddForce(-transform.up);
@@ -128,19 +169,20 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    private void ZoomBehaviour()
+    private void ZoomBehaviour(InputAction.CallbackContext context)
     {
-        if (Input.GetButton("Vertical"))
+        if (context.performed)
         {
-            camBehaviour.m_Lens.FieldOfView = 100;
+            DOTween.To(() => camBehaviour.m_Lens.FieldOfView, x => camBehaviour.m_Lens.FieldOfView = x, 100, 1);
         } else
         {
-            camBehaviour.m_Lens.FieldOfView = cameraTargetFov;
+            DOTween.To(() => camBehaviour.m_Lens.FieldOfView, x => camBehaviour.m_Lens.FieldOfView = x, cameraTargetFov, 1);
         }
     }
 
     private void GroundedBehaviour()
     {
+        //todo: convert to raycast, tagcheck
         Collider[] hitColliders = Physics.OverlapSphere(this.transform.position, 0.2f);
         if (hitColliders.Length > 1)
         {
